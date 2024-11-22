@@ -5,7 +5,7 @@ import requests
 import threading
 import time
 
-base_ip = "http://172.27.113.135:8085"
+base_ip = "http://192.168.7.105:8085"
 
 # Fetch data from endpoints
 def fetch_data(endpoint):
