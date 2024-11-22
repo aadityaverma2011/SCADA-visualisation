@@ -54,9 +54,25 @@ def toggle_control():
     if control_state == "OFF":
         control_state = "ON"
         control_button.config(text="Take Control: ON")
+        # Show control inputs
+        set_controls_frame.pack(pady=20)
     else:
         control_state = "OFF"
         control_button.config(text="Take Control: OFF")
+        # Hide control inputs
+        set_controls_frame.pack_forget()
+
+# Set PLC controls (Update the actual PLCs based on input values)
+def set_plc_values():
+    # Here you can call the corresponding APIs to set values to PLCs
+    # For simplicity, printing the values
+    plc1_temp = plc1_temp_input.get()
+    window_state = window_state_var.get()
+    curtain_state = curtain_state_var.get()
+    ac_state = ac_state_var.get()
+    ac_temp = ac_temp_input.get() if ac_state == "on" else "N/A"
+    print(f"Setting PLC1 Temperature: {plc1_temp}")
+    print(f"Setting Window: {window_state}, Curtain: {curtain_state}, AC: {ac_state}, AC Temp: {ac_temp}")
 
 # Main application
 root = tk.Tk()
@@ -147,6 +163,35 @@ div3.pack(pady=20)
 control_state = "OFF"  # Initial state of the control button
 control_button = ttk.Button(div3, text="Take Control: OFF", command=toggle_control)
 control_button.pack()
+
+# Div4: Set control inputs (hidden until "Take Control" is ON)
+set_controls_frame = ttk.Frame(root)
+set_controls_frame.pack_forget()  # Initially hidden
+
+# Create input fields and buttons for control actions
+plc1_temp_input = ttk.Entry(set_controls_frame)
+plc1_temp_input.grid(row=0, column=1, padx=5, pady=5)
+ttk.Label(set_controls_frame, text="Set PLC1 Temperature").grid(row=0, column=0, padx=5, pady=5)
+
+window_state_var = ttk.Combobox(set_controls_frame, values=["open", "close"])
+window_state_var.grid(row=1, column=1, padx=5, pady=5)
+ttk.Label(set_controls_frame, text="Set Window").grid(row=1, column=0, padx=5, pady=5)
+
+curtain_state_var = ttk.Combobox(set_controls_frame, values=["open", "close"])
+curtain_state_var.grid(row=2, column=1, padx=5, pady=5)
+ttk.Label(set_controls_frame, text="Set Curtain").grid(row=2, column=0, padx=5, pady=5)
+
+ac_state_var = ttk.Combobox(set_controls_frame, values=["on", "off"])
+ac_state_var.grid(row=3, column=1, padx=5, pady=5)
+ttk.Label(set_controls_frame, text="Set AC").grid(row=3, column=0, padx=5, pady=5)
+
+ac_temp_input = ttk.Entry(set_controls_frame)
+ac_temp_input.grid(row=4, column=1, padx=5, pady=5)
+ttk.Label(set_controls_frame, text="Set AC Temperature").grid(row=4, column=0, padx=5, pady=5)
+
+# Set button to apply values
+apply_button = ttk.Button(set_controls_frame, text="Apply", command=set_plc_values)
+apply_button.grid(row=5, columnspan=2, pady=10)
 
 # Start update thread
 threading.Thread(target=update_ui, daemon=True).start()
