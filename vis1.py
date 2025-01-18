@@ -5,9 +5,9 @@ import requests
 import threading
 import time
 
-base_ip = "http://192.168.7.105:8085"
+base_ip = "http://192.168.86.14:5000"  # Update with your server's IP
 
-# Fetch data from endpoints
+# Fetch data from an endpoint
 def fetch_data(endpoint):
     try:
         response = requests.get(endpoint)
@@ -18,61 +18,89 @@ def fetch_data(endpoint):
     except Exception as e:
         return {"error": str(e)}
 
-# Update UI dynamically
+# Update the UI periodically
 def update_ui():
     while True:
-        # Fetch data from endpoints
+        # Fetch data for all PLCs
         plc1_data = fetch_data(f"{base_ip}/plc1")
         plc2_data = fetch_data(f"{base_ip}/plc2")
         plc3_data = fetch_data(f"{base_ip}/plc3")
 
-        # Update PLC1 Temperature
+        # Update PLC1 data
         plc1_temp_label.config(text=f"Temperature: {plc1_data.get('temperature', 'N/A')} °C")
 
-        # Update PLC2 Temperature and Dynamic Images
-        plc2_temp_label.config(text=f"Temperature: {plc2_data.get('temperature', 'N/A')} °C")
-        window_state = plc2_data.get("window", "close")
-        curtain_state = plc2_data.get("curtain", "close")
+        # Update PLC2 data
+        plc2_temp_label.config(text=f"Temperature: {plc1_data.get('temperature', 'N/A')} °C")  # Shared temperature
+        window_state = "open" if plc2_data.get("window", 0) == 1 else "close"
+        curtain_state = "open" if plc2_data.get("curtain", 0) == 1 else "close"
         window_label.config(image=window_images[window_state])
         window_label.image = window_images[window_state]
         curtain_label.config(image=curtain_images[curtain_state])
         curtain_label.image = curtain_images[curtain_state]
 
-        # Update PLC3 Temperature, AC State, and Dynamic Images
-        plc3_temp_label.config(text=f"Temperature: {plc3_data.get('temperature', 'N/A')} °C")
-        ac_state = plc3_data.get("AC_state", "off")
-        ac_temperature = plc3_data.get("AC_temperature", "N/A")
+        # Update PLC3 data
+        ac_state = "on" if plc3_data.get("ac_state", 0) == 1 else "off"
+        ac_temp = plc3_data.get("ac_temp", "N/A")
         ac_label.config(image=ac_images[ac_state])
         ac_label.image = ac_images[ac_state]
-        ac_temp_label.config(text=f"AC Temp: {ac_temperature if ac_state == 'on' else 'off'}")
+        ac_temp_label.config(text=f"AC Temp: {ac_temp if ac_state == 'on' else 'Off'}")
 
-        time.sleep(3)
+        time.sleep(1)
 
-# Toggle control button state
+# Toggle control state
 def toggle_control():
     global control_state
     if control_state == "OFF":
         control_state = "ON"
         control_button.config(text="Take Control: ON")
-        # Show control inputs
+        set_control_parameters("on")
         set_controls_frame.pack(pady=20)
     else:
         control_state = "OFF"
         control_button.config(text="Take Control: OFF")
-        # Hide control inputs
+        set_control_parameters("off")
         set_controls_frame.pack_forget()
 
-# Set PLC controls (Update the actual PLCs based on input values)
+# Send control parameters to all PLCs
+def set_control_parameters(state):
+    try:
+        requests.post(f"{base_ip}/plc1/update", json={"control": state})
+        requests.post(f"{base_ip}/plc2", json={"control": state})
+        requests.post(f"{base_ip}/plc3", json={"control": state})
+        print(f"Control set to {state}")
+    except Exception as e:
+        print(f"Error setting control parameters: {e}")
+
+# Apply control settings
 def set_plc_values():
-    # Here you can call the corresponding APIs to set values to PLCs
-    # For simplicity, printing the values
     plc1_temp = plc1_temp_input.get()
     window_state = window_state_var.get()
     curtain_state = curtain_state_var.get()
     ac_state = ac_state_var.get()
-    ac_temp = ac_temp_input.get() if ac_state == "on" else "N/A"
-    print(f"Setting PLC1 Temperature: {plc1_temp}")
-    print(f"Setting Window: {window_state}, Curtain: {curtain_state}, AC: {ac_state}, AC Temp: {ac_temp}")
+    ac_temp = ac_temp_input.get() if ac_state == "on" else None
+
+    try:
+        if plc1_temp:
+            requests.post(f"{base_ip}/plc1/update", json={"temperature": plc1_temp})
+
+        if window_state:
+            window_state_int = 1 if window_state == "open" else 0
+            requests.post(f"{base_ip}/plc2", json={"window": window_state_int})
+
+        if curtain_state:
+            curtain_state_int = 1 if curtain_state == "open" else 0
+            requests.post(f"{base_ip}/plc2", json={"curtain": curtain_state_int})
+
+        if ac_state:
+            ac_state_int = 1 if ac_state == "on" else 0
+            requests.post(f"{base_ip}/plc3", json={"ac_state": ac_state_int})
+
+            if ac_state == "on" and ac_temp:
+                requests.post(f"{base_ip}/plc3", json={"ac_temp": ac_temp})
+
+        print("PLC values updated successfully.")
+    except Exception as e:
+        print(f"Error updating PLC values: {e}")
 
 # Main application
 root = tk.Tk()
@@ -97,78 +125,56 @@ ac_images = {
     "off": ImageTk.PhotoImage(Image.open("ac_off.png").resize((100, 100))),
 }
 
-# Div1: PLCs in a single horizontal line
+# Div1: PLCs in a row
 div1 = ttk.Frame(root)
 div1.pack(pady=20)
 
-# PLC1
 plc1_container = ttk.Frame(div1)
 plc1_container.pack(side=tk.LEFT, padx=10)
 ttk.Label(plc1_container, image=plc1_image).pack()
 plc1_temp_label = ttk.Label(plc1_container, text="Temperature: Loading...")
 plc1_temp_label.pack()
 
-# Dashed line between PLC1 and PLC2
-line1_canvas = tk.Canvas(div1, width=100, height=20, bg="white", highlightthickness=0)
-line1_canvas.pack(side=tk.LEFT, padx=10)
-line1_canvas.create_line(10, 10, 90, 10, dash=(4, 2))  # Horizontal dashed line
-
-# PLC2
 plc2_container = ttk.Frame(div1)
 plc2_container.pack(side=tk.LEFT, padx=10)
 ttk.Label(plc2_container, image=plc2_image).pack()
 plc2_temp_label = ttk.Label(plc2_container, text="Temperature: Loading...")
 plc2_temp_label.pack()
 
-# Dashed line between PLC2 and PLC3
-line2_canvas = tk.Canvas(div1, width=100, height=20, bg="white", highlightthickness=0)
-line2_canvas.pack(side=tk.LEFT, padx=10)
-line2_canvas.create_line(10, 10, 90, 10, dash=(4, 2))  # Horizontal dashed line
-
-# PLC3
 plc3_container = ttk.Frame(div1)
 plc3_container.pack(side=tk.LEFT, padx=10)
 ttk.Label(plc3_container, image=plc3_image).pack()
 plc3_temp_label = ttk.Label(plc3_container, text="Temperature: Loading...")
 plc3_temp_label.pack()
 
-# Div2: Control images below Div1
+# Div2: Controls
 div2 = ttk.Frame(root)
 div2.pack(pady=20)
 
-# Dynamic controls (Window, Curtain, and AC) in the same row
-dynamic_frame = ttk.Frame(div2)
-dynamic_frame.pack(pady=20)
-
-# Window control
-window_label = ttk.Label(dynamic_frame, text="Loading...")
+window_label = ttk.Label(div2, text="Loading...")
 window_label.pack(side=tk.LEFT, padx=5)
 
-# Curtain control
-curtain_label = ttk.Label(dynamic_frame, text="Loading...")
+curtain_label = ttk.Label(div2, text="Loading...")
 curtain_label.pack(side=tk.LEFT, padx=5)
 
-# AC control
-ac_label = ttk.Label(dynamic_frame, text="Loading...")
+ac_label = ttk.Label(div2, text="Loading...")
 ac_label.pack(side=tk.LEFT, padx=5)
 
-# AC temperature control
-ac_temp_label = ttk.Label(dynamic_frame, text="AC Temp: Loading...")
+ac_temp_label = ttk.Label(div2, text="AC Temp: Loading...")
 ac_temp_label.pack(side=tk.LEFT, padx=5)
 
-# Div3: Take Control Button
+# Div3: Control button
 div3 = ttk.Frame(root)
 div3.pack(pady=20)
 
-control_state = "OFF"  # Initial state of the control button
+control_state = "OFF"
 control_button = ttk.Button(div3, text="Take Control: OFF", command=toggle_control)
 control_button.pack()
 
-# Div4: Set control inputs (hidden until "Take Control" is ON)
+# Div4: Set control inputs
 set_controls_frame = ttk.Frame(root)
-set_controls_frame.pack_forget()  # Initially hidden
+set_controls_frame.pack_forget()
 
-# Create input fields and buttons for control actions
 plc1_temp_input = ttk.Entry(set_controls_frame)
 plc1_temp_input.grid(row=0, column=1, padx=5, pady=5)
 ttk.Label(set_controls_frame, text="Set PLC1 Temperature").grid(row=0, column=0, padx=5, pady=5)
@@ -189,11 +195,10 @@ ac_temp_input = ttk.Entry(set_controls_frame)
 ac_temp_input.grid(row=4, column=1, padx=5, pady=5)
 ttk.Label(set_controls_frame, text="Set AC Temperature").grid(row=4, column=0, padx=5, pady=5)
 
-# Set button to apply values
 apply_button = ttk.Button(set_controls_frame, text="Apply", command=set_plc_values)
 apply_button.grid(row=5, columnspan=2, pady=10)
 
-# Start update thread
+# Start UI update thread
 threading.Thread(target=update_ui, daemon=True).start()
 
 # Run application
